@@ -1,0 +1,4 @@
+qiskit_trotter.ipynb
+rot_observable.ipynb
+.venv/*
+__pycache__/*
