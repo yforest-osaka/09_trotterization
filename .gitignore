@@ -2,3 +2,5 @@ qiskit_trotter.ipynb
 rot_observable.ipynb
 .venv/*
 __pycache__/*
+MPF.ipynb
+qiskit_trotter.ipynb

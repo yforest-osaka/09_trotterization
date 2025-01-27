@@ -42,7 +42,7 @@ def gen_pauli_rotation_gate(qubit_indices: list, pauli_ids: list, angle: float, 
             for idx in qubit_indices:
                 if idx != position:
                     gate_lst.append(CNOT(idx, position))
-        gate_lst.append(RZ(position, -1 * angle))  # qulacsでは回転角が逆で定義されている
+        gate_lst.append(RZ(position, angle))
         if len(qubit_indices) >= 2:  # CNOT必要
             # CNOTゲートを適用
             for idx in qubit_indices:
@@ -51,7 +51,7 @@ def gen_pauli_rotation_gate(qubit_indices: list, pauli_ids: list, angle: float, 
         apply_pauli_gates(gate_lst, qubit_indices, pauli_ids, right_side=True)
         return gate_lst
     else:
-        gate_lst = [PauliRotation(qubit_indices, pauli_ids, -1 * angle)]  # qulacsでは回転角が逆で定義されている
+        gate_lst = [PauliRotation(qubit_indices, pauli_ids, angle)]
         return gate_lst
 
 
@@ -86,26 +86,26 @@ def calculate_exact_time_evolution_unitary_matrix(nqubits, coef_J, coef_h, delta
 def generate_one_trotter_layer_circuit(nqubits, coef_J, coef_h, delta, order=1, use_cnots=False):
     one_layer_circuit = QuantumCircuit(nqubits)
 
-    time_ZZ = 2 * delta * coef_J
-    time_X = 2 * delta * coef_h
+    time_ZZ = -1 * 2 * delta * coef_J  # qulacsでは回転角が逆で定義されている
+    time_X = -1 * 2 * delta * coef_h  # qulacsでは回転角が逆で定義されている
 
     if order == 1:
         ### 1st order Trotter decomposition(U_1(t) = e^{t/n A} e^{t/n B})
         gates = []
         for i in range(nqubits):
+            gates.append(RX(i, -1 * time_X))
             gates += gen_pauli_rotation_gate([i, (i + 1) % nqubits], [3, 3], time_ZZ, with_cnot=use_cnots)
-            gates.append(RX(i, time_X))
 
     elif order == 2:
         ### 2nd order Trotter decomposition(U_2(t) = e^{t/2n A} e^{t/n B} e^{t/2n A})
         gates = []
         for i in range(nqubits):
             zz_elements = gen_pauli_rotation_gate(
-                [i, (i + 1) % nqubits], [3, 3], time_ZZ / 2, with_cnot=use_cnots
+                [i, (i + 1) % nqubits], [3, 3], time_ZZ, with_cnot=use_cnots
             )  # angle changed! (time_ZZ -> time_ZZ / 2)
+            gates.append(RX(i, time_X / 2))
             gates += zz_elements
-            gates.append(RX(i, time_X))
-            gates += zz_elements
+            gates.append(RX(i, time_X / 2))
 
     elif order == 4:
         ### 4th order Trotter decomposition
@@ -113,22 +113,35 @@ def generate_one_trotter_layer_circuit(nqubits, coef_J, coef_h, delta, order=1, 
         val_s_2 = 1 / (4 - np.cbrt(4))
         u_2_elements = []
         for _ in range(2):  # repeat U_2(s_2 t) twice
+            # for i in range(nqubits):
+            #     zz_elements = gen_pauli_rotation_gate(
+            #         [i, (i + 1) % nqubits], [3, 3], val_s_2 * time_ZZ / 2, with_cnot=use_cnots
+            #     )  # angle changed! (time_ZZ -> time_ZZ / 2)
+            #     u_2_elements += zz_elements
+            #     u_2_elements.append(RX(i, val_s_2 * time_X))
+            #     u_2_elements += zz_elements
             for i in range(nqubits):
                 zz_elements = gen_pauli_rotation_gate(
-                    [i, (i + 1) % nqubits], [3, 3], val_s_2 * time_ZZ / 2, with_cnot=use_cnots
+                    [i, (i + 1) % nqubits], [3, 3], val_s_2 * time_ZZ, with_cnot=use_cnots
                 )  # angle changed! (time_ZZ -> time_ZZ / 2)
+                u_2_elements.append(RX(i, val_s_2 * time_X / 2))
                 u_2_elements += zz_elements
-                u_2_elements.append(RX(i, val_s_2 * time_X))
-                u_2_elements += zz_elements
+                u_2_elements.append(RX(i, val_s_2 * time_X / 2))
         gates += u_2_elements
 
         for i in range(nqubits):  # gen U_2((1-4*s_2) t)
+            # zz_elements = gen_pauli_rotation_gate(
+            #     [i, (i + 1) % nqubits], [3, 3], (1 - 4 * val_s_2) * time_ZZ / 2, with_cnot=use_cnots
+            # )
+            # gates += zz_elements
+            # gates.append(RX(i, (1 - 4 * val_s_2) * time_X))
+            # gates += zz_elements
             zz_elements = gen_pauli_rotation_gate(
-                [i, (i + 1) % nqubits], [3, 3], (1 - 4 * val_s_2) * time_ZZ / 2, with_cnot=use_cnots
+                [i, (i + 1) % nqubits], [3, 3], (1 - 4 * val_s_2) * time_ZZ, with_cnot=use_cnots
             )
+            gates.append(RX(i, (1 - 4 * val_s_2) * time_X / 2))
             gates += zz_elements
-            gates.append(RX(i, (1 - 4 * val_s_2) * time_X))
-            gates += zz_elements
+            gates.append(RX(i, (1 - 4 * val_s_2) * time_X / 2))
 
         # add two U_2(s_2 t) again
         gates += u_2_elements
